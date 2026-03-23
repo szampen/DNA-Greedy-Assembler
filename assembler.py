@@ -28,12 +28,18 @@ def load_reads_fasta(fasta_filename):
         reads.append(str(record.seq))
     return reads
 
-def merge_reads_into_sequence(reads,iteration = 0):
-    best_overlap = 0
-    best_pairs = []
-    for i in range(len(reads)):
-        for j in range(len(reads)):
-            if i != j:
+
+def merge_reads_into_sequence(reads):
+    iteration = 0
+    while True:
+        best_overlap = 0
+        best_pairs = []
+
+        for i in range(len(reads)):
+            for j in range(len(reads)):
+                if i == j:
+                    continue
+
                 overlap = find_overlap(reads[i], reads[j])
                 if overlap > best_overlap:
                     best_overlap = overlap
@@ -41,23 +47,22 @@ def merge_reads_into_sequence(reads,iteration = 0):
                 elif overlap == best_overlap and overlap > 0:
                     best_pairs.append((i,j))
 
-    if best_overlap == 0:
-        return sorted(reads, key=len, reverse=True)
+        if best_overlap == 0:
+            break
 
-    best_i,best_j = random.choice(best_pairs)
+        best_i, best_j = random.choice(best_pairs)
+        merged_seq = reads[best_i] + reads[best_j][best_overlap:]
 
-    merged_seq = reads[best_i] + reads[best_j][best_overlap:]
+        new_reads = [read for k, read in enumerate(reads) if k not in (best_i,best_j)]
+        new_reads.append(merged_seq)
+        reads = new_reads
 
-    new_reads = []
-    for k, read in enumerate(reads):
-        if k != best_i and k != best_j:
-            new_reads.append(read)
-    new_reads.append(merged_seq)
+        iteration += 1
+        if iteration % 10 == 0:
+            print(f"   Iteracja {iteration}: {len(new_reads)} kontigów, najlepszy overlap: {best_overlap}")
 
-    if iteration % 10 == 0:
-        print(f"   Iteracja {iteration}: {len(new_reads)} kontigów, najlepszy overlap: {best_overlap}")
+    return sorted(reads, key=len, reverse=True)
 
-    return merge_reads_into_sequence(new_reads, iteration + 1)
 
 def test(sequence_file):
     records = list(SeqIO.parse(sequence_file, "fasta"))
