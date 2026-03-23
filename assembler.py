@@ -1,40 +1,62 @@
 import random
+import logging
+import sys
+from typing import List, Tuple
 from Bio import SeqIO
 from Bio import Seq
 
-def generate_random_reads(sequence, fragments_len = 200, expected_cover_len = 5):
+# Configuration of basic logging for better console visualization
+logging.basicConfig(level=logging.INFO, format="%(message)s", stream=sys.stdout)
+
+def generate_random_reads(sequence : str, fragments_len : int = 200, expected_cover_len : int = 5, outpul_file : str = "reads.fasta") -> None:
+    """
+    Simulates random DNA sequencing by generating reads from a reference sequence.
+    """
     number_of_reads = int((len(sequence) / fragments_len) * expected_cover_len)
     reads = []
+    max_start = len(sequence) - fragments_len
+
+    if max_start <= 0:
+        logging.warning(f"Sequence too short for specified fragment length")
+        return
+
     for i in range(number_of_reads):
-        max_start = len(sequence) - fragments_len
-        if max_start > 0:
-            start_pos = random.randint(0, max_start)
-            read = sequence[start_pos:start_pos + fragments_len]
-            reads.append(SeqIO.SeqRecord(Seq.Seq(read),f"read_{i + 1}",description=""))
-    SeqIO.write(reads,"reads.fasta","fasta")
+        start_pos = random.randint(0, max_start)
+        read = sequence[start_pos:start_pos + fragments_len]
+        reads.append(SeqIO.SeqRecord(Seq.Seq(read),f"read_{i + 1}",description=""))
 
-def find_overlap(seq1, seq2, min_overlap = 1):
-    max_overlap = min(len(seq1), len(seq2))
+    SeqIO.write(reads,outpul_file,"fasta")
+    logging.info(f"Successfully generated {number_of_reads} reads to {outpul_file}")
 
-    for overlap_len in range(max_overlap, min_overlap, -1):
+def find_overlap(seq1: str, seq2: str, min_overlap: int = 1) -> int:
+    """
+    Finds the maximum suffix-prefix overlap between two sequences.
+    """
+    max_possible_overlap = min(len(seq1), len(seq2))
+
+    for overlap_len in range(max_possible_overlap, min_overlap, -1):
         if seq1[-overlap_len:] == seq2[:overlap_len]:
             return overlap_len
 
     return 0
 
-def load_reads_fasta(fasta_filename):
-    reads = []
-    for record in SeqIO.parse(fasta_filename,"fasta"):
-        reads.append(str(record.seq))
-    return reads
+def load_reads_fasta(fasta_filename : str) -> List[str]:
+    """
+    Loads sequence from a FASTA file into a list of strings.
+    """
+    return [str(record.seq) for record in SeqIO.parse(fasta_filename,"fasta")]
 
 
-def merge_reads_into_sequence(reads):
+def merge_reads_into_sequence(reads: List[str]) -> List[str]:
+    """
+    Assembles reads into contigs using an iterative greedy approach.
+    """
     iteration = 0
     while True:
         best_overlap = 0
-        best_pairs = []
+        best_pairs: List[Tuple[int, int]] = []
 
+        # Searching for the best match between pairs
         for i in range(len(reads)):
             for j in range(len(reads)):
                 if i == j:
@@ -47,41 +69,62 @@ def merge_reads_into_sequence(reads):
                 elif overlap == best_overlap and overlap > 0:
                     best_pairs.append((i,j))
 
+        # If a match is not found, then finish assembling
         if best_overlap == 0:
+            logging.info("Assembly finished. No more overlaps found.")
             break
 
+        # Random pick from the pair with the best score
         best_i, best_j = random.choice(best_pairs)
         merged_seq = reads[best_i] + reads[best_j][best_overlap:]
 
+        # Creating new list without merged fragments, adding new contig
         new_reads = [read for k, read in enumerate(reads) if k not in (best_i,best_j)]
         new_reads.append(merged_seq)
         reads = new_reads
 
         iteration += 1
         if iteration % 10 == 0:
-            print(f"   Iteracja {iteration}: {len(new_reads)} kontigów, najlepszy overlap: {best_overlap}")
+            logging.info(f"Iteration {iteration}: {len(reads)} conting remaining, best overlap {best_overlap}.")
 
     return sorted(reads, key=len, reverse=True)
 
 
-def test(sequence_file):
-    records = list(SeqIO.parse(sequence_file, "fasta"))
-    original_sequence = str(records[0].seq)
-    fragment = original_sequence[:10000]
-    print(len(fragment))
-    print(fragment)
+def run_test(sequence_file: str, sample_size: int = 10000) -> None:
+    """
+    Main test pipeline: Loads sequence, generate reads and assembles them.
+    """
+    try:
+        records = list(SeqIO.parse(sequence_file, "fasta"))
+        if not records:
+            logging.error("Source file is empty or invalid.")
+            return
 
-    generate_random_reads(fragment)
+        original_sequence = str(records[0].seq)[:sample_size]
+        logging.info(f"Testing on sequence length: {len(original_sequence)}")
 
-    contigs = merge_reads_into_sequence(load_reads_fasta("reads.fasta"))
+        generate_random_reads(original_sequence)
 
-    sum = 0
-    for i, contig in enumerate(contigs):
-        sum += len(contig)
-        print(f"\nKontig {i+1}:")
-        print(f"  Długość: {len(contig)} nukleotydów")
-        print(contig)
-    print(f"\nSum: {sum}")
+        reads = load_reads_fasta("reads.fasta")
+        contigs = merge_reads_into_sequence(reads)
 
-#test wykonywany jest na >gi|224514821|ref|NT_167199.1| Homo sapiens chromosome Y genomic contig, GRCh37.p5 Primary Assembly
-test("hs_ref_GRCh37.p5_chrY.fa")
+        print("\n" + "="*30)
+        print("ASSEMBLY RESULTS")
+        print("="*30)
+        for i,contig in enumerate(contigs):
+            print(f"Contig {i+1}: Length {len(contig)}")
+            if i == 0: # Printing only the longest contig for a clear result
+                print(f"Top Contig: {contig}")
+
+        total_len = sum(len(c) for c in contigs)
+        print(f"\nTotal length of all contigs: {total_len}")
+
+    except FileNotFoundError:
+        logging.error(f"File {sequence_file} not found. Please provide a valid FASTA file.")
+
+
+if __name__ == "__main__":
+    # Test is computed by default on >gi|224514821|ref|NT_167199.1| Homo sapiens chromosome Y genomic contig, GRCh37.p5 Primary Assembly
+    input_file = sys.argv[1] if len(sys.argv) > 1 else "hs_ref_GRCh37.p5_chrY.fa"
+
+    run_test(input_file)
