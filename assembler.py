@@ -8,11 +8,11 @@ from Bio import Seq
 # Configuration of basic logging for better console visualization
 logging.basicConfig(level=logging.INFO, format="%(message)s", stream=sys.stdout)
 
-def generate_random_reads(sequence : str, fragments_len : int = 200, expected_cover_len : int = 5, outpul_file : str = "reads.fasta") -> None:
+def generate_random_reads(sequence : str, fragments_len : int = 200, expected_coverage : int = 5, output_file : str = "reads.fasta") -> None:
     """
     Simulates random DNA sequencing by generating reads from a reference sequence.
     """
-    number_of_reads = int((len(sequence) / fragments_len) * expected_cover_len)
+    number_of_reads = int((len(sequence) / fragments_len) * expected_coverage)
     reads = []
     max_start = len(sequence) - fragments_len
 
@@ -25,8 +25,8 @@ def generate_random_reads(sequence : str, fragments_len : int = 200, expected_co
         read = sequence[start_pos:start_pos + fragments_len]
         reads.append(SeqIO.SeqRecord(Seq.Seq(read),f"read_{i + 1}",description=""))
 
-    SeqIO.write(reads,outpul_file,"fasta")
-    logging.info(f"Successfully generated {number_of_reads} reads to {outpul_file}")
+    SeqIO.write(reads,output_file,"fasta")
+    logging.info(f"Successfully generated {number_of_reads} reads to {output_file}")
 
 def find_overlap(seq1: str, seq2: str, min_overlap: int = 1) -> int:
     """
@@ -85,7 +85,7 @@ def merge_reads_into_sequence(reads: List[str]) -> List[str]:
 
         iteration += 1
         if iteration % 10 == 0:
-            logging.info(f"Iteration {iteration}: {len(reads)} conting remaining, best overlap {best_overlap}.")
+            logging.info(f"Iteration {iteration}: {len(reads)} contig remaining, best overlap {best_overlap}.")
 
     return sorted(reads, key=len, reverse=True)
 
@@ -114,7 +114,7 @@ def run_test(sequence_file: str, sample_size: int = 10000) -> None:
         for i,contig in enumerate(contigs):
             print(f"Contig {i+1}: Length {len(contig)}")
             if i == 0: # Printing only the longest contig for a clear result
-                print(f"Top Contig: {contig}")
+                print(f"Top Contig: {contig[:100]}")
 
         total_len = sum(len(c) for c in contigs)
         print(f"\nTotal length of all contigs: {total_len}")
